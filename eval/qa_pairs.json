@@ -1,0 +1,37 @@
+[
+  {
+    "id": "qa-1",
+    "tenant_id": "tenant_a",
+    "question": "What is the bonus interest rate on the Skyline Saver account?",
+    "expected_source": "savings_account_terms.md",
+    "expected_keywords": ["4.25"]
+  },
+  {
+    "id": "qa-2",
+    "tenant_id": "tenant_a",
+    "question": "What is the annual fee on the Skyline Rewards credit card?",
+    "expected_source": "credit_card_rewards.md",
+    "expected_keywords": ["129"]
+  },
+  {
+    "id": "qa-3",
+    "tenant_id": "tenant_b",
+    "question": "What is the bonus interest rate on the Horizon Saver account?",
+    "expected_source": "savings_account_terms.md",
+    "expected_keywords": ["5.10"]
+  },
+  {
+    "id": "qa-4",
+    "tenant_id": "tenant_b",
+    "question": "How many days do I have to lodge a transaction dispute?",
+    "expected_source": "dispute_process.md",
+    "expected_keywords": ["60"]
+  },
+  {
+    "id": "qa-5",
+    "tenant_id": "tenant_a",
+    "question": "How many days do I have to lodge a transaction dispute?",
+    "expected_source": "dispute_process.md",
+    "expected_keywords": ["45"]
+  }
+]

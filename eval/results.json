@@ -1,0 +1,37 @@
+[
+  {
+    "id": "qa-1",
+    "tenant_id": "tenant_a",
+    "recall_hit": true,
+    "quality_hit": true,
+    "answer": "The bonus interest rate on the Skyline Saver account is 4.25% p.a. provided the customer meets certain conditions: they must deposit at least $200 in the month, make no more than three withdrawals, and have a closing balance higher than their opening balance."
+  },
+  {
+    "id": "qa-2",
+    "tenant_id": "tenant_a",
+    "recall_hit": true,
+    "quality_hit": true,
+    "answer": "The annual fee on the Skyline Rewards credit card is $129, which is waived in the first year for new customers."
+  },
+  {
+    "id": "qa-3",
+    "tenant_id": "tenant_b",
+    "recall_hit": true,
+    "quality_hit": false,
+    "answer": "I don't have that information."
+  },
+  {
+    "id": "qa-4",
+    "tenant_id": "tenant_b",
+    "recall_hit": true,
+    "quality_hit": true,
+    "answer": "You have 60 days to lodge a transaction dispute."
+  },
+  {
+    "id": "qa-5",
+    "tenant_id": "tenant_a",
+    "recall_hit": true,
+    "quality_hit": true,
+    "answer": "You have 45 days to lodge a transaction dispute."
+  }
+]
