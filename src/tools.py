@@ -2,14 +2,17 @@
 
 PLACEHOLDER — Westpac said they'll provide the real `get_account_balance`
 stub; this one exists so the agent loop is runnable/testable now. Swap the
-function body for the real one when it arrives; the schema and the
-tenant_id-pinning behaviour in agent.py should not need to change.
+function body for the real one when it arrives.
 
-Isolation note: tenant_id is a required argument here because the brief
-specifies it, but the agent (src/agent.py) never lets the LLM choose it —
-it is always overwritten server-side with the tenant_id of the current
-session before the tool executes. An LLM cannot be prompt-injected into
-fetching another tenant's balance through this tool.
+Isolation note: the real Python function takes `tenant_id`, because the
+brief's stub signature requires it. But GET_ACCOUNT_BALANCE_SCHEMA below —
+the JSON description handed to the LLM — deliberately does NOT include
+tenant_id as a parameter. The schema we show the model and the function we
+actually call don't have to match 1:1. The model is never asked for a
+tenant_id, never generates one, and has no way to think about other
+tenants through this tool at all — it's not "the model proposes one and we
+override it," there's simply nothing for it to propose. `agent.py` supplies
+the real tenant_id itself, from the session, when it calls the function.
 """
 from __future__ import annotations
 
@@ -21,16 +24,12 @@ GET_ACCOUNT_BALANCE_SCHEMA = {
         "parameters": {
             "type": "object",
             "properties": {
-                "tenant_id": {
-                    "type": "string",
-                    "description": "Tenant identifier. Ignored if it does not match the active session's tenant.",
-                },
                 "account_id": {
                     "type": "string",
                     "description": "The account identifier to look up, e.g. 'ACC-1001'.",
                 },
             },
-            "required": ["tenant_id", "account_id"],
+            "required": ["account_id"],
         },
     },
 }

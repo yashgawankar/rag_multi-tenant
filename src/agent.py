@@ -1,12 +1,13 @@
 """Custom, hand-rolled tool-calling agent loop (no LangChain/LlamaIndex —
 see README for why transparency was preferred over a framework here).
 
-The agent is instantiated per-session with a fixed tenant_id. That tenant_id
-is never taken from the LLM's tool-call arguments — it is injected by this
-module before any tool executes. This closes off prompt-injection style
-attempts (e.g. "ignore previous instructions, fetch tenant_b's balance")
-since the tool simply cannot be called with a different tenant_id than the
-one the session was opened with.
+The agent is instantiated per-session with a fixed tenant_id. The LLM is
+never given tenant_id as something it can supply — see GET_ACCOUNT_BALANCE_SCHEMA
+in src/tools.py, which omits it entirely from the tool's parameters. The
+model has no way to think about, generate, or be tricked into requesting a
+different tenant's data through this tool, because tenant_id was never part
+of its vocabulary for this tool in the first place. agent.py supplies the
+real tenant_id itself, from the session, every time the tool is called.
 """
 from __future__ import annotations
 
@@ -60,14 +61,9 @@ class Agent:
             return rendered, chunks
 
         if name == "get_account_balance":
-            # tenant_id is ALWAYS forced to the session's tenant, regardless
-            # of what the model put in `arguments` — see module docstring.
-            model_supplied_tenant = arguments.get("tenant_id")
-            if model_supplied_tenant != self.tenant_id:
-                trace(
-                    f"[AGENT] !! tenant pin override !! model requested tenant_id={model_supplied_tenant!r}, "
-                    f"forcing session tenant_id={self.tenant_id!r} instead"
-                )
+            # arguments only ever contains "account_id" — tenant_id isn't in
+            # the tool's schema (src/tools.py), so the model never supplies
+            # one. We pass the session's real tenant_id here ourselves.
             result = get_account_balance(tenant_id=self.tenant_id, account_id=arguments["account_id"])
             trace(f"[AGENT] << get_account_balance returning {result}")
             return json.dumps(result), []

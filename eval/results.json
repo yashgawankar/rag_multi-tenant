@@ -4,7 +4,7 @@
     "tenant_id": "tenant_a",
     "recall_hit": true,
     "quality_hit": true,
-    "answer": "The bonus interest rate on the Skyline Saver account is 4.25% p.a. To receive the full bonus rate, the customer must, in the same calendar month:\n\n1. Deposit at least $200 from an external source.\n2. Make no more than 3 withdrawals.\n3. Keep the closing balance higher than the opening balance.\n\nIf any condition is not met, the base rate of 0.5% p.a. applies for that month only, and bonus eligibility resumes the following month."
+    "answer": "The bonus interest rate on the Skyline Saver account is 4.25% p.a., but it requires meeting specific conditions: deposit at least $200 from an external source, make no more than 3 withdrawals, and keep the closing balance higher than the opening balance in the same calendar month. If these conditions are not met, the base rate of 0.5% p.a. applies for that month."
   },
   {
     "id": "qa-2",
@@ -32,6 +32,6 @@
     "tenant_id": "tenant_a",
     "recall_hit": true,
     "quality_hit": true,
-    "answer": "You have 45 days to lodge a transaction dispute. This information can be found in the Tenant A \u2014 Transaction Dispute Process document. You can lodge a dispute within 45 days of the transaction date via the Tenant A mobile app or by calling support."
+    "answer": "You have 45 days to lodge a transaction dispute."
   }
 ]
