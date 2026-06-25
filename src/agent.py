@@ -83,6 +83,10 @@ class Agent:
             trace(f"[AGENT] --- loop iteration {iteration}: calling LLM ---")
             response = self.llm.chat(messages, tools=tools)
             message = response.choices[0].message
+            trace(
+                f"[AGENT] raw message from API: role={message.role!r} "
+                f"content={message.content!r} tool_calls={message.tool_calls!r}"
+            )
 
             if not message.tool_calls:
                 trace("[AGENT] model returned a final answer (no tool_calls) -> exiting loop")
