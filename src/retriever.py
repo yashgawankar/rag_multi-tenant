@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from src.config import Settings
+from src.trace import trace
 from src.vector_store import TenantStore
 
 
@@ -37,19 +38,27 @@ def _store_for(tenant_id: str, settings: Settings) -> TenantStore:
 
 
 def retrieve(tenant_id: str, query: str, settings: Settings, top_k: int = 5) -> list[RetrievedChunk]:
+    trace(f"[RETRIEVER] tenant={tenant_id!r} query={query!r} top_k={top_k}")
+
     store = _store_for(tenant_id, settings)
     hits = store.hybrid_search(query, top_k=top_k)
+    trace(f"[RETRIEVER] hybrid_search returned {len(hits)} hit(s) from tenant={tenant_id!r}'s own store")
 
     chunks: list[RetrievedChunk] = []
     for hit in hits:
         payload = hit.payload or {}
         hit_tenant = payload.get("tenant_id")
         if hit_tenant != tenant_id:
+            trace(f"[RETRIEVER] !! ISOLATION VIOLATION !! hit tenant_id={hit_tenant!r} != requested {tenant_id!r}")
             raise TenantIsolationViolation(
                 f"Retrieval for tenant_id={tenant_id!r} returned a chunk tagged "
                 f"tenant_id={hit_tenant!r} (source={payload.get('source')!r}). "
                 "Aborting rather than passing cross-tenant content to the LLM."
             )
+        trace(
+            f"[RETRIEVER]   ok: source={payload.get('source')!r} chunk={payload.get('chunk_index')} "
+            f"score={hit.score:.3f} tenant_id_check=PASS"
+        )
         chunks.append(
             RetrievedChunk(
                 text=payload.get("text", ""),

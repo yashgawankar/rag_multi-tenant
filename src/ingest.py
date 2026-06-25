@@ -9,6 +9,7 @@ from pypdf import PdfReader
 
 from src.chunking import chunk_text
 from src.config import Settings
+from src.trace import trace
 from src.vector_store import TenantStore
 
 SUPPORTED_SUFFIXES = {".md", ".txt", ".pdf"}
@@ -34,7 +35,9 @@ def ingest_tenant(tenant_id: str, docs_dir: Path, settings: Settings) -> int:
         if path.suffix.lower() not in SUPPORTED_SUFFIXES:
             continue
         text = _read_file(path)
-        for chunk in chunk_text(text):
+        chunks = chunk_text(text)
+        trace(f"[INGEST] tenant={tenant_id!r} file={path.name!r} -> {len(chunks)} chunk(s)")
+        for chunk in chunks:
             points.append(
                 {
                     "id": _stable_id(tenant_id, path.name, chunk.chunk_index),

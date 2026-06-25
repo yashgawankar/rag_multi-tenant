@@ -4,21 +4,21 @@
     "tenant_id": "tenant_a",
     "recall_hit": true,
     "quality_hit": true,
-    "answer": "The bonus interest rate on the Skyline Saver account is 4.25% p.a. provided the customer meets certain conditions: they must deposit at least $200 in the month, make no more than three withdrawals, and have a closing balance higher than their opening balance."
+    "answer": "The bonus interest rate on the Skyline Saver account is 4.25% p.a. To receive the full bonus rate, the customer must, in the same calendar month:\n\n1. Deposit at least $200 from an external source.\n2. Make no more than 3 withdrawals.\n3. Keep the closing balance higher than the opening balance.\n\nIf any condition is not met, the base rate of 0.5% p.a. applies for that month only, and bonus eligibility resumes the following month."
   },
   {
     "id": "qa-2",
     "tenant_id": "tenant_a",
     "recall_hit": true,
     "quality_hit": true,
-    "answer": "The annual fee on the Skyline Rewards credit card is $129, which is waived in the first year for new customers."
+    "answer": "The annual fee on the Skyline Rewards credit card is $129, waived in year 1 for new customers."
   },
   {
     "id": "qa-3",
     "tenant_id": "tenant_b",
     "recall_hit": true,
-    "quality_hit": false,
-    "answer": "I don't have that information."
+    "quality_hit": true,
+    "answer": "The bonus interest rate on the Horizon Saver account is 5.10% p.a. To receive the full bonus rate, the customer must deposit at least $1,000 from an external source and make no more than 1 withdrawal in the same calendar month. If either condition is not met, the base rate of 0.10% p.a. applies for that month."
   },
   {
     "id": "qa-4",
@@ -32,6 +32,6 @@
     "tenant_id": "tenant_a",
     "recall_hit": true,
     "quality_hit": true,
-    "answer": "You have 45 days to lodge a transaction dispute."
+    "answer": "You have 45 days to lodge a transaction dispute. This information can be found in the Tenant A \u2014 Transaction Dispute Process document. You can lodge a dispute within 45 days of the transaction date via the Tenant A mobile app or by calling support."
   }
 ]

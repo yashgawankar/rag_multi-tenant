@@ -106,8 +106,9 @@ line in the follow-up call, rather than something a framework did for me.
 LLM access is provider-agnostic (`src/llm.py`): Groq, Gemini, and OpenRouter
 all expose OpenAI-compatible chat-completions endpoints, so one thin
 wrapper around the `openai` SDK covers all three — switching providers is a
-`.env` edit (see `.env.example`), not a code change. Default is Groq
-(free tier, fast, reliable tool-calling, Llama 3.3 70B).
+`.env` edit (see `.env.example`), not a code change. Default is Groq,
+`llama-4-scout-17b-16e-instruct` — see the model-choice note in the Eval
+section below for why this specific model and not the largest one available.
 
 ## Eval
 
@@ -125,30 +126,37 @@ Both are deliberately cheap/deterministic rather than an LLM-as-judge, given
 the brief's "tiny eval" framing — no extra API spend, no judge-model
 variance to explain.
 
-**Latest run** (placeholder docs, Groq `llama-3.1-8b-instant`):
+**Latest run** (placeholder docs, Groq `llama-4-scout-17b-16e-instruct`):
 
 ```
 Recall@5: 5/5 = 1.00
-Answer-quality (keyword containment): 4/5 = 0.80
+Answer-quality (keyword containment): 5/5 = 1.00
 ```
 
-The one miss (`qa-3`) is a genuine, reproducible failure mode worth noting:
-retrieval correctly surfaced the right chunk (`recall_hit=True`), but the
+Earlier runs on `llama-3.1-8b-instant` scored 4/5 on answer-quality — retrieval
+correctly surfaced the right chunk every time (`recall_hit=True`), but the
 small 8B model occasionally answered "I don't have that information" anyway
-on that specific question, despite the fact being present in context —
-re-running the same question standalone usually gets it right. This is
-exactly the gap the answer-quality check exists to catch (retrieval success
-≠ answer correctness), and it's a concrete argument for a slightly larger
-or more careful model if this were going further than a take-home. Full
-per-question output is in `eval/results.json`.
+despite the fact being present in context, a genuine, reproducible failure
+mode (retrieval success ≠ answer correctness — exactly the gap this check
+exists to catch). A 4-model bake-off against the same 5 questions
+(`llama-3.1-8b-instant`, `llama-4-scout-17b-16e-instruct`, `openai/gpt-oss-20b`,
+`qwen/qwen3-32b`) showed all three larger models scoring 5/5 with reliable
+tool-calling; `llama-4-scout-17b-16e-instruct` was picked as the new default
+for giving the most direct answers without extra markdown/commentary
+clutter. Full per-question output is in `eval/results.json`.
 
-**Note on model choice:** the default model is `llama-3.1-8b-instant`, not
-the larger `llama-3.3-70b-versatile`. The 70B model has a reproducible Groq
-tool-calling bug — it emits its function call as literal text
-(`<function=search_docs{...}</function>`) instead of a structured
-`tool_calls` response, which the OpenAI SDK then rejects as a 400. The 8B
-model calls tools correctly and reliably, so it's the default despite being
-the smaller model — see `.env.example` for the full note.
+**Note on model choice:** `llama-3.3-70b-versatile` (Groq's largest general
+model) has a reproducible tool-calling bug — it emits its function call as
+literal text (`<function=search_docs{...}</function>`) instead of a
+structured `tool_calls` response, which the OpenAI SDK then rejects as a
+400. That ruled it out regardless of quality. Among the models that call
+tools correctly, `llama-3.1-8b-instant` works but is the smallest/cheapest
+and showed real answer-quality flakiness above. `llama-4-scout-17b-16e-instruct`,
+`openai/gpt-oss-20b`, and `qwen/qwen3-32b` all called tools reliably and
+scored 5/5 in the bake-off; `llama-4-scout` is the default for the cleanest
+output formatting, but any of the three would be a reasonable choice —
+this is documented as a deliberate, tested decision rather than "whichever
+model happened to be set first."
 
 ## What I'd improve with more time
 

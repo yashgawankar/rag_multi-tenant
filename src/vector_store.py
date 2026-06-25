@@ -21,6 +21,7 @@ from fastembed import SparseTextEmbedding, TextEmbedding
 from qdrant_client import QdrantClient, models
 
 from src.config import Settings, tenant_storage_path
+from src.trace import trace
 
 COLLECTION_NAME = "docs"
 DENSE_VECTOR_NAME = "dense"
@@ -43,7 +44,9 @@ class TenantStore:
     def __init__(self, tenant_id: str, settings: Settings):
         self.tenant_id = tenant_id
         self._settings = settings
-        self._client = QdrantClient(path=tenant_storage_path(tenant_id, settings))
+        path = tenant_storage_path(tenant_id, settings)
+        trace(f"[VECTOR_STORE] opening embedded Qdrant store for tenant={tenant_id!r} at path={path!r}")
+        self._client = QdrantClient(path=path)
         self._dense = _dense_embedder(settings.embedding_model)
         self._sparse = _sparse_embedder(settings.sparse_embedding_model)
         self._ensure_collection()
@@ -91,11 +94,17 @@ class TenantStore:
                     payload=payload,
                 )
             )
+        trace(f"[VECTOR_STORE] upserting {len(qdrant_points)} point(s) into tenant={self.tenant_id!r}'s collection")
         self._client.upsert(collection_name=COLLECTION_NAME, points=qdrant_points)
 
     def hybrid_search(self, query: str, top_k: int = 5) -> list[models.ScoredPoint]:
         dense_vec = next(self._dense.embed([query]))
         sparse_vec = next(self._sparse.embed([query]))
+        trace(
+            f"[VECTOR_STORE] embedded query into dense({len(dense_vec)}-dim) + "
+            f"sparse({len(sparse_vec.indices)} nonzero terms) vectors; prefetching top {top_k * 4} "
+            f"from each, then RRF-fusing down to top {top_k}"
+        )
 
         result = self._client.query_points(
             collection_name=COLLECTION_NAME,
