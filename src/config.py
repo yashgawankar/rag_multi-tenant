@@ -19,9 +19,17 @@ class Settings:
     sparse_embedding_model: str = os.environ.get("SPARSE_EMBEDDING_MODEL", "Qdrant/bm25")
 
 
-def tenant_storage_path(tenant_id: str, settings: Settings) -> str:
-    """Each tenant gets a separate on-disk Qdrant store — physical isolation,
-    not a shared collection with a filter. See README 'Isolation' section."""
+def validate_tenant(tenant_id: str) -> None:
+    """Stand-in for a real tenant registry lookup (see README). Every
+    code path that accepts a tenant_id should route through this check
+    before it touches the vector store."""
     if tenant_id not in TENANTS:
         raise ValueError(f"Unknown tenant_id: {tenant_id!r}. Known tenants: {TENANTS}")
-    return os.path.join(settings.qdrant_storage_root, tenant_id)
+
+
+def shared_storage_path(settings: Settings) -> str:
+    """One Qdrant store shared by all tenants — see README 'Isolation
+    approach' for why this replaced the earlier per-tenant-path design.
+    Isolation is enforced by a mandatory payload filter, not by physical
+    separation."""
+    return os.path.join(settings.qdrant_storage_root, "shared")

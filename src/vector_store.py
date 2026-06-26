@@ -1,17 +1,30 @@
-"""Per-tenant vector store.
+"""Shared vector store for all tenants.
 
 Isolation design (see README for full rationale):
-  Layer 1 - PHYSICAL: each tenant gets its own embedded Qdrant storage
-            directory (a separate on-disk database, not a shared one).
-            A TenantStore for tenant_a literally holds no client handle
-            that could ever reach tenant_b's files.
-  Layer 2 - LOGICAL (redundant, defence-in-depth): every point payload
-            still carries tenant_id, so the data is self-describing even
-            if it were ever migrated into a shared collection later.
+  One Qdrant collection, shared by every tenant. Every point's payload
+  carries tenant_id, which is the ONLY thing distinguishing one tenant's
+  data from another's at the storage layer. Isolation is enforced by:
+    - a payload index on tenant_id with is_tenant=True (Qdrant's documented
+      multitenancy optimization — note: a no-op in embedded/local mode,
+      see _ensure_collection),
+    - a mandatory `must` filter on tenant_id applied to every search, at
+      every stage of the hybrid query (both prefetches and the final fusion),
+    - retriever.py's post-fetch assertion as the last-resort backstop.
+  This mirrors how Qdrant is actually used for multi-tenant RAG in
+  production (one collection, indexed tenant filter), rather than the
+  per-tenant-physical-store design this replaced. The trade-off: isolation
+  now depends on the filter being correctly applied on every query path,
+  not on physical impossibility. That's why retriever.py is the *only*
+  code in this repo allowed to call hybrid_search — one audited choke
+  point instead of trusting every call site.
 
 Qdrant's embedded/local mode (QdrantClient(path=...)) needs no server,
-no Docker, and no API key — it persists straight to disk, which is why it
-was chosen over a hosted/server deployment for this exercise.
+no Docker, and no API key — it persists straight to disk. Known limitation
+of this mode specifically: payload indexes (including is_tenant) have no
+effect locally — confirmed empirically, Qdrant prints a UserWarning and
+filtering still works correctly, just via unindexed scan instead of an
+optimized lookup. At this corpus size that's not observable; on a real
+Qdrant server the index would actually activate.
 """
 from __future__ import annotations
 
@@ -20,12 +33,13 @@ from functools import lru_cache
 from fastembed import SparseTextEmbedding, TextEmbedding
 from qdrant_client import QdrantClient, models
 
-from src.config import Settings, tenant_storage_path
+from src.config import Settings, shared_storage_path, validate_tenant
 from src.trace import trace
 
 COLLECTION_NAME = "docs"
 DENSE_VECTOR_NAME = "dense"
 SPARSE_VECTOR_NAME = "sparse"
+TENANT_FIELD = "tenant_id"
 
 
 @lru_cache(maxsize=1)
@@ -38,14 +52,20 @@ def _sparse_embedder(model_name: str) -> SparseTextEmbedding:
     return SparseTextEmbedding(model_name=model_name)
 
 
-class TenantStore:
-    """A Qdrant client scoped to exactly one tenant's on-disk storage path."""
+def _tenant_filter(tenant_id: str) -> models.Filter:
+    return models.Filter(
+        must=[models.FieldCondition(key=TENANT_FIELD, match=models.MatchValue(value=tenant_id))]
+    )
 
-    def __init__(self, tenant_id: str, settings: Settings):
-        self.tenant_id = tenant_id
-        self._settings = settings
-        path = tenant_storage_path(tenant_id, settings)
-        trace(f"[VECTOR_STORE] opening embedded Qdrant store for tenant={tenant_id!r} at path={path!r}")
+
+class SharedVectorStore:
+    """A single Qdrant client + collection shared by every tenant.
+    tenant_id is required on every write and every search — there is no
+    method on this class that can read or write without one."""
+
+    def __init__(self, settings: Settings):
+        path = shared_storage_path(settings)
+        trace(f"[VECTOR_STORE] opening shared embedded Qdrant store at path={path!r}")
         self._client = QdrantClient(path=path)
         self._dense = _dense_embedder(settings.embedding_model)
         self._sparse = _sparse_embedder(settings.sparse_embedding_model)
@@ -64,11 +84,21 @@ class TenantStore:
             },
             sparse_vectors_config={SPARSE_VECTOR_NAME: models.SparseVectorParams()},
         )
+        # is_tenant=True is Qdrant's documented multitenancy optimization —
+        # clusters one tenant's vectors together on disk for better cache
+        # locality. No-op in embedded/local mode (see module docstring);
+        # included anyway because this is the real production call.
+        self._client.create_payload_index(
+            collection_name=COLLECTION_NAME,
+            field_name=TENANT_FIELD,
+            field_schema=models.KeywordIndexParams(type=models.KeywordIndexType.KEYWORD, is_tenant=True),
+        )
+        trace(f"[VECTOR_STORE] created collection {COLLECTION_NAME!r} with tenant_id payload index (is_tenant=True)")
 
     def upsert_chunks(self, points: list[dict]) -> None:
         """points: [{"id": int, "text": str, "payload": {...}}]; payload MUST
-        include tenant_id (asserted here as a last-resort guard against a
-        caller accidentally mixing tenants during ingestion)."""
+        include a valid tenant_id — checked here as a last-resort guard
+        against untagged data ever entering the shared collection."""
         texts = [p["text"] for p in points]
         dense_vecs = list(self._dense.embed(texts))
         sparse_vecs = list(self._sparse.embed(texts))
@@ -76,11 +106,7 @@ class TenantStore:
         qdrant_points = []
         for point, dense, sparse in zip(points, dense_vecs, sparse_vecs):
             payload = point["payload"]
-            if payload.get("tenant_id") != self.tenant_id:
-                raise ValueError(
-                    f"Refusing to upsert: payload tenant_id={payload.get('tenant_id')!r} "
-                    f"does not match store tenant {self.tenant_id!r}"
-                )
+            validate_tenant(payload.get(TENANT_FIELD))
             qdrant_points.append(
                 models.PointStruct(
                     id=point["id"],
@@ -94,16 +120,19 @@ class TenantStore:
                     payload=payload,
                 )
             )
-        trace(f"[VECTOR_STORE] upserting {len(qdrant_points)} point(s) into tenant={self.tenant_id!r}'s collection")
+        trace(f"[VECTOR_STORE] upserting {len(qdrant_points)} point(s) into shared collection")
         self._client.upsert(collection_name=COLLECTION_NAME, points=qdrant_points)
 
-    def hybrid_search(self, query: str, top_k: int = 5) -> list[models.ScoredPoint]:
+    def hybrid_search(self, query: str, tenant_id: str, top_k: int = 5) -> list[models.ScoredPoint]:
+        validate_tenant(tenant_id)
+        tenant_filter = _tenant_filter(tenant_id)
+
         dense_vec = next(self._dense.embed([query]))
         sparse_vec = next(self._sparse.embed([query]))
         trace(
             f"[VECTOR_STORE] embedded query into dense({len(dense_vec)}-dim) + "
             f"sparse({len(sparse_vec.indices)} nonzero terms) vectors; prefetching top {top_k * 4} "
-            f"from each, then RRF-fusing down to top {top_k}"
+            f"from each (filtered to tenant_id={tenant_id!r}), then RRF-fusing down to top {top_k}"
         )
 
         result = self._client.query_points(
@@ -113,6 +142,7 @@ class TenantStore:
                     query=dense_vec.tolist(),
                     using=DENSE_VECTOR_NAME,
                     limit=top_k * 4,
+                    filter=tenant_filter,
                 ),
                 models.Prefetch(
                     query=models.SparseVector(
@@ -121,12 +151,15 @@ class TenantStore:
                     ),
                     using=SPARSE_VECTOR_NAME,
                     limit=top_k * 4,
+                    filter=tenant_filter,
                 ),
             ],
             query=models.FusionQuery(fusion=models.Fusion.RRF),
+            query_filter=tenant_filter,
             limit=top_k,
         )
         return result.points
 
-    def count(self) -> int:
-        return self._client.count(COLLECTION_NAME).count
+    def count(self, tenant_id: str | None = None) -> int:
+        query_filter = _tenant_filter(tenant_id) if tenant_id else None
+        return self._client.count(COLLECTION_NAME, count_filter=query_filter).count

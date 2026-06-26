@@ -1,13 +1,25 @@
-"""Retrieval entry point used by the agent.
+"""Retrieval entry point used by the agent — the ONLY code in this repo
+allowed to query the shared vector store.
 
-This module is the single choke point through which all document retrieval
-flows, and it is where Layer 3 of the isolation design lives: an explicit
-runtime assertion that every hit returned actually belongs to the requested
-tenant. Layers 1-2 (separate on-disk stores + payload tenant_id, see
-vector_store.py) should make a cross-tenant hit structurally impossible —
-this assertion exists so that *if* that ever stops being true (a bug, a
-future refactor to shared infra, a copy-paste error), retrieval fails loudly
-instead of silently leaking a tenant's content into another tenant's answer.
+Isolation now rests on two things, both inside this one audited path:
+  1. vector_store.py applies a mandatory `must` filter on tenant_id to
+     every stage of the hybrid search (both prefetches and the fusion).
+  2. This module re-checks every single hit's tenant_id payload against
+     the requested tenant before it's allowed anywhere near the LLM
+     context, and raises TenantIsolationViolation if they ever disagree.
+
+Since the data physically lives in one shared collection now (see
+vector_store.py for why — mirrors a real production multitenancy pattern
+rather than a toy per-tenant-store design), the filter in (1) is what
+actually keeps tenants apart, not physical separation. That makes the
+assertion in (2) more than a defensive afterthought: it is the backstop
+for the one thing that could realistically go wrong — a future code path
+that calls hybrid_search without going through this function, or a typo'd
+filter. By making this the *only* function that calls hybrid_search at
+all (nothing else in the codebase imports vector_store directly), "did
+every call site remember the filter" stops being a fleet-wide question
+and becomes a property of one function, which this module's own tests
+(tests/test_isolation.py) verify directly.
 """
 from __future__ import annotations
 
@@ -16,7 +28,7 @@ from functools import lru_cache
 
 from src.config import Settings
 from src.trace import trace
-from src.vector_store import TenantStore
+from src.vector_store import SharedVectorStore
 
 
 class TenantIsolationViolation(RuntimeError):
@@ -32,17 +44,17 @@ class RetrievedChunk:
     tenant_id: str
 
 
-@lru_cache(maxsize=None)
-def _store_for(tenant_id: str, settings: Settings) -> TenantStore:
-    return TenantStore(tenant_id=tenant_id, settings=settings)
+@lru_cache(maxsize=1)
+def _store(settings: Settings) -> SharedVectorStore:
+    return SharedVectorStore(settings=settings)
 
 
 def retrieve(tenant_id: str, query: str, settings: Settings, top_k: int = 5) -> list[RetrievedChunk]:
     trace(f"[RETRIEVER] tenant={tenant_id!r} query={query!r} top_k={top_k}")
 
-    store = _store_for(tenant_id, settings)
-    hits = store.hybrid_search(query, top_k=top_k)
-    trace(f"[RETRIEVER] hybrid_search returned {len(hits)} hit(s) from tenant={tenant_id!r}'s own store")
+    store = _store(settings)
+    hits = store.hybrid_search(query, tenant_id=tenant_id, top_k=top_k)
+    trace(f"[RETRIEVER] hybrid_search (filtered to tenant_id={tenant_id!r}) returned {len(hits)} hit(s)")
 
     chunks: list[RetrievedChunk] = []
     for hit in hits:
@@ -53,7 +65,8 @@ def retrieve(tenant_id: str, query: str, settings: Settings, top_k: int = 5) -> 
             raise TenantIsolationViolation(
                 f"Retrieval for tenant_id={tenant_id!r} returned a chunk tagged "
                 f"tenant_id={hit_tenant!r} (source={payload.get('source')!r}). "
-                "Aborting rather than passing cross-tenant content to the LLM."
+                "The vector store's tenant_id filter should have excluded this — "
+                "aborting rather than passing cross-tenant content to the LLM."
             )
         trace(
             f"[RETRIEVER]   ok: source={payload.get('source')!r} chunk={payload.get('chunk_index')} "

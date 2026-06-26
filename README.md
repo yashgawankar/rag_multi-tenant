@@ -15,41 +15,72 @@ python -m venv .venv && source .venv/bin/activate   # or .venv\Scripts\activate 
 pip install -r requirements.txt
 cp .env.example .env   # fill in your LLM_API_KEY (free Groq key by default)
 
-python -m scripts.ingest_all        # builds both tenants' vector stores
+python -m scripts.ingest_all        # ingests both tenants into the shared vector store
 python -m scripts.chat tenant_a     # chat as tenant_a
 python -m eval.run_eval             # retrieval + answer-quality metrics
 pytest tests/                       # isolation tests
 ```
 
 No Docker, no external server — Qdrant runs embedded, persisting to
-`./storage/qdrant/<tenant>/` (git-ignored).
+`./storage/qdrant/shared/` (git-ignored). All tenants share this one store;
+isolation is enforced by a mandatory filter, not by separate paths — see
+"Isolation approach" below for why.
 
 ## Isolation approach
 
 This is the part I expect to be scrutinized most, so it's layered
-deliberately rather than relying on a single mechanism:
+deliberately rather than relying on a single mechanism. The design mirrors
+a pattern I've implemented in production before — one shared collection,
+an indexed tenant filter — rather than a toy per-tenant-store setup that
+wouldn't survive contact with a real tenant count.
 
-**Layer 1 — physical separation.** Each tenant gets its own embedded Qdrant
-store at a separate on-disk path (`storage/qdrant/tenant_a/`,
-`storage/qdrant/tenant_b/`). This isn't "one collection with a filter" — a
-`TenantStore` instance for tenant A holds a client handle that has no way to
-reach tenant B's files at all. There's no shared index where a missing
-`.filter()` call could leak data, because there's nothing to filter — the
-data is in a different database.
+**Layer 1 — one shared Qdrant collection, with tenant_id as an indexed,
+mandatory filter on every query.** All tenants' chunks live in the same
+collection (`src/vector_store.py`). At collection-creation time, a payload
+index is created on `tenant_id` with `is_tenant=True` — Qdrant's documented
+multitenancy optimization, which clusters one tenant's vectors together on
+disk for better cache locality. Every search — both the dense and sparse
+prefetch stages, and the final RRF fusion — carries a `must` filter on
+`tenant_id` (`SharedVectorStore.hybrid_search`). I tested this combination
+directly: a hybrid query with the filter applied to both prefetches and the
+top-level query correctly returns only the requested tenant's points even
+when both tenants' vectors score identically against the query (see
+`tests/test_isolation.py::test_both_tenants_are_genuinely_colocated_in_one_collection`,
+which proves the data really is colocated — this isn't a folder boundary
+doing the work, the filter is). I rejected an earlier version of this
+codebase that gave each tenant a fully separate on-disk Qdrant store
+(no shared collection at all) — that's simpler to *demonstrate* in a 2-tenant
+demo, but doesn't scale: Qdrant's own guidance is against per-tenant
+collections for "many small tenants" (fixed per-collection overhead,
+operational burden multiplied by tenant count), and embedded mode only
+allows one open client per path at a time, which I hit firsthand running
+concurrent processes against it during development.
 
-**Layer 2 — payload tenant_id (defence in depth).** Every chunk still
-carries `tenant_id` in its Qdrant payload, even though Layer 1 already makes
-cross-tenant access impossible. This is redundant by design: if this ever
-moved to a shared-collection architecture for scale (see "what I'd improve"
-below), the data is already tagged correctly.
+**Known limitation, found by testing rather than assumed:** Qdrant's
+embedded/local mode (used here — no server, no Docker, no API key, see
+below) silently no-ops payload indexes; I confirmed this empirically
+(`UserWarning: Payload indexes have no effect in the local Qdrant`).
+Filtering itself still works correctly without the index — I verified this
+directly too — it just falls back to an unindexed scan instead of an
+optimized lookup, which is unobservable at 10 documents per tenant. On a
+real Qdrant server the `is_tenant` index would actually activate. I'm
+calling the real production API anyway (rather than skipping it) so the
+code matches what I'd actually ship, with the local-mode caveat documented
+rather than hidden.
 
-**Layer 3 — runtime assertion in the retriever.** `src/retriever.py` checks
+**Layer 2 — runtime assertion in the retriever.** `src/retriever.py` checks
 every single hit's `tenant_id` against the requested tenant before it's
 allowed anywhere near the LLM context, and raises `TenantIsolationViolation`
-if they ever disagree. This should never fire given Layers 1-2, but it means
-a future bug fails loudly and immediately instead of silently leaking.
+if they ever disagree. This is more than a defensive afterthought here:
+since isolation now genuinely depends on the filter being applied correctly
+(there's no physical separation backstopping it), this assertion is the
+last line of defense against a future code path that calls
+`hybrid_search` directly instead of going through this module.
+`src/retriever.py` is the *only* file in this codebase that imports
+`vector_store.py` — making "did every call site remember the filter" a
+property of one audited function instead of a fleet-wide assumption.
 
-**Layer 4 — the LLM is never given `tenant_id` to begin with.** The real
+**Layer 3 — the LLM is never given `tenant_id` to begin with.** The real
 `get_account_balance` function takes `tenant_id` (the brief's stub signature
 requires it), but the *tool schema* shown to the model — `GET_ACCOUNT_BALANCE_SCHEMA`
 in `src/tools.py` — only exposes `account_id` as a parameter. The schema we
@@ -62,17 +93,20 @@ no proposed value to override, so there's no path through which a
 confused or adversarial prompt could even attempt to influence which
 tenant's balance gets fetched.
 
-**Layer 5 — isolation eval.** `tests/test_isolation.py` and the eval set
+**Layer 4 — isolation eval.** `tests/test_isolation.py` and the eval set
 explicitly probe each tenant with queries about the *other* tenant's
-products and assert zero leakage.
+products and assert zero leakage, plus a direct proof that both tenants'
+data is genuinely colocated in one collection (not just "assumed" from the
+absence of separate folders).
 
-**Trade-off:** physical per-tenant stores don't scale to thousands of
-tenants (you don't want thousands of separate DB files/processes). At that
-point I'd move to Qdrant's native multitenancy pattern — one collection,
-indexed `tenant_id` payload field, every query mandatorily filtered, with
-the same retrieval-side assertion in Layer 3 kept as a safety net. For 2
-tenants and ~10 docs each, physical separation is simpler, cheaper to
-demonstrate, and removes an entire class of bugs outright.
+**Trade-off, stated plainly:** a shared collection with a mandatory filter
+is the right call for real scale, but it does mean isolation is a property
+you have to prove (tests, the retriever choke-point, the assertion) rather
+than something structurally guaranteed by separate storage. I'm accepting
+that trade-off deliberately because it's the pattern that actually holds up
+past a handful of tenants — the alternative (physical per-tenant stores)
+would have been the *easier* thing to build for a 2-tenant take-home, not
+the more correct one.
 
 ## Chunking choice
 
@@ -167,17 +201,42 @@ model happened to be set first."
 
 ## What I'd improve with more time
 
-- **Scale isolation pattern**: move to Qdrant's shared-collection
-  multitenancy (indexed payload field + mandatory filter) once tenant count
-  grows past a handful, while keeping the Layer 3 assertion as a safety net.
+- **Real Qdrant server instead of embedded mode**: would make the
+  `is_tenant` payload index actually activate (it's a documented no-op in
+  embedded/local mode — see Isolation approach above), and would remove the
+  one-client-per-path limitation that caused lock contention during
+  development whenever two processes touched the same store concurrently.
+- **Token-aware, fully recursive chunking**: swap the hand-rolled splitter
+  for `langchain-text-splitters`' `RecursiveCharacterTextSplitter` with a
+  `tiktoken`-based length function and percentage-based overlap (10-20%).
+  The current splitter only falls back from paragraphs to sentences, not
+  to line breaks or raw characters, so a long bullet-point list without
+  blank lines between items could end up under-split — a real gap I'd
+  rather fix with a battle-tested splitter than patch by hand.
+- **LLM retry-with-backoff**: a transient Groq 503 currently crashes the
+  whole `ask()` call (hit this live during development);
+  `LLMClient.chat()` should retry transient 5xx/rate-limit errors with
+  exponential backoff before giving up.
+- **Anti-hallucination measures**: `temperature=0` for deterministic
+  output, explicit citation requirements in the system prompt, and
+  possibly a chain-of-verification pass (extract claims from the draft
+  answer, verify each against retrieved context before returning it).
+- **Context ordering for the "lost in the middle" effect**: LLMs attend
+  most reliably to the start and end of a long context window; the most
+  relevant retrieved chunk should be placed first (and possibly repeated
+  last) rather than left in whatever order retrieval returned it.
 - **Richer eval**: LLM-as-judge for faithfulness/answer-relevance once
   there's a real budget for it, plus MRR alongside Recall@k.
-- **Reranking**: add a cross-encoder rerank step once the corpus is large
-  enough per tenant for it to matter.
+- **Reranking**: add a cross-encoder rerank step (bi-encoder retrieval for
+  recall, cross-encoder reranking for precision) once the corpus is large
+  enough per tenant for it to matter — at ~10 docs/tenant the candidate
+  pool is too small for reranking to change top-k ordering meaningfully.
 - **Citations in answers**: surface `[source#chunk_index]` inline in the
   agent's final answer, not just alongside it, for auditability.
 - **Streaming + multi-turn memory** in `scripts/chat.py` (currently
   single-shot per question, no conversation history carried across turns).
 - **Structured logging** of every retrieval (tenant_id, query, hit sources,
   isolation-assertion outcome) for an auditable trail — important for a
-  banking context specifically.
+  banking context specifically. The `TRACE=1` flag's print-based tracing
+  was built for interactively understanding the system during development,
+  not as production observability.

@@ -1,5 +1,5 @@
-"""Load a tenant's docs directory, chunk them, and upsert into that tenant's
-(and only that tenant's) vector store."""
+"""Load a tenant's docs directory, chunk them, and upsert into the shared
+vector store, tagged with that tenant's id."""
 from __future__ import annotations
 
 import hashlib
@@ -10,7 +10,7 @@ from pypdf import PdfReader
 from src.chunking import chunk_text
 from src.config import Settings
 from src.trace import trace
-from src.vector_store import TenantStore
+from src.vector_store import SharedVectorStore
 
 SUPPORTED_SUFFIXES = {".md", ".txt", ".pdf"}
 
@@ -28,7 +28,7 @@ def _stable_id(tenant_id: str, source: str, chunk_index: int) -> int:
 
 
 def ingest_tenant(tenant_id: str, docs_dir: Path, settings: Settings) -> int:
-    store = TenantStore(tenant_id=tenant_id, settings=settings)
+    store = SharedVectorStore(settings=settings)
 
     points = []
     for path in sorted(docs_dir.iterdir()):
