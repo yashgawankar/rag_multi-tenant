@@ -35,7 +35,11 @@ def ingest_tenant(tenant_id: str, docs_dir: Path, settings: Settings) -> int:
         if path.suffix.lower() not in SUPPORTED_SUFFIXES:
             continue
         text = _read_file(path)
-        chunks = chunk_text(text)
+        # target_size=400 tokens (bge-small truncates silently past 512 —
+        # see SharedVectorStore.count_tokens); overlap stays character-based,
+        # an approximation that's fine since overlap is "carry some extra
+        # context forward," not a hard limit the embedding model enforces.
+        chunks = chunk_text(text, target_size=400, overlap_chars=120, length_fn=store.count_tokens)
         trace(f"[INGEST] tenant={tenant_id!r} file={path.name!r} -> {len(chunks)} chunk(s)")
         for chunk in chunks:
             points.append(

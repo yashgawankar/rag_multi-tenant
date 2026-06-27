@@ -175,3 +175,10 @@ class SharedVectorStore:
     def count(self, tenant_id: str | None = None) -> int:
         query_filter = _tenant_filter(tenant_id) if tenant_id else None
         return self._client.count(COLLECTION_NAME, count_filter=query_filter).count
+
+    def count_tokens(self, text: str) -> int:
+        """Real token count from the actual dense embedding model's
+        tokenizer (bge-small truncates silently past 512 tokens — this is
+        used as chunking.py's length_fn so chunks never exceed that
+        unnoticed, instead of approximating with character count)."""
+        return self._dense.token_count([text])
