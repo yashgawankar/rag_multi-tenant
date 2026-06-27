@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import json
 
+from src.audit import AuditRecord, write_audit_record
 from src.config import Settings
 from src.llm import LLMClient
-from src.retriever import RetrievedChunk, retrieve
+from src.retriever import RetrievedChunk, TenantIsolationViolation, retrieve
 from src.tools import GET_ACCOUNT_BALANCE_SCHEMA, get_account_balance
 from src.trace import trace
 
@@ -48,16 +49,28 @@ class Agent:
         self.settings = settings or Settings()
         self.llm = LLMClient(self.settings)
 
-    def _execute_tool(self, name: str, arguments: dict) -> tuple[str, list[RetrievedChunk]]:
+    def _execute_tool(
+        self, name: str, arguments: dict, record: AuditRecord
+    ) -> tuple[str, list[RetrievedChunk]]:
         trace(f"[AGENT] >> executing tool: {name}({arguments})")
+        record.record_tool_call(name, arguments)
 
         if name == "search_docs":
-            chunks = retrieve(self.tenant_id, arguments["query"], self.settings)
+            try:
+                chunks = retrieve(self.tenant_id, arguments["query"], self.settings)
+            except TenantIsolationViolation as e:
+                # The audit write must never soften this failure — record
+                # the violation for the forensic trail, then re-raise
+                # unchanged so the request still aborts exactly as before.
+                record.record_isolation_violation(e.requested_tenant, e.hit_tenant, e.source)
+                write_audit_record(record)
+                raise
             if not chunks:
                 trace("[AGENT] << search_docs found nothing")
                 return "No relevant documents found.", []
             rendered = "\n\n".join(f"[{c.source}#{c.chunk_index}] {c.text}" for c in chunks)
             trace(f"[AGENT] << search_docs returning {len(chunks)} chunk(s) to the model")
+            record.record_retrieved_chunks(chunks)
             return rendered, chunks
 
         if name == "get_account_balance":
@@ -72,6 +85,7 @@ class Agent:
 
     def ask(self, question: str) -> dict:
         trace(f"[AGENT] session tenant={self.tenant_id!r}  question={question!r}")
+        record = AuditRecord(tenant_id=self.tenant_id, question=question)
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": question},
@@ -91,17 +105,22 @@ class Agent:
             if not message.tool_calls:
                 trace("[AGENT] model returned a final answer (no tool_calls) -> exiting loop")
                 deduped = list({(c.source, c.chunk_index): c for c in retrieved_chunks}.values())
+                record.finalize(message.content)
+                write_audit_record(record)
                 return {"answer": message.content, "retrieved": deduped}
 
             trace(f"[AGENT] model requested {len(message.tool_calls)} tool call(s) -> continuing loop")
             messages.append(message.model_dump(exclude_none=True))
             for call in message.tool_calls:
                 arguments = json.loads(call.function.arguments)
-                tool_result, chunks = self._execute_tool(call.function.name, arguments)
+                tool_result, chunks = self._execute_tool(call.function.name, arguments, record)
                 retrieved_chunks.extend(chunks)
                 messages.append(
                     {"role": "tool", "tool_call_id": call.id, "content": tool_result}
                 )
 
         trace("[AGENT] !! exhausted tool-call budget (4 iterations) without a final answer")
-        return {"answer": "I wasn't able to resolve this within the tool-call budget.", "retrieved": retrieved_chunks}
+        answer = "I wasn't able to resolve this within the tool-call budget."
+        record.finalize(answer)
+        write_audit_record(record)
+        return {"answer": answer, "retrieved": retrieved_chunks}

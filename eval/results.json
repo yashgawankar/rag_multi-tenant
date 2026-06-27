@@ -4,7 +4,7 @@
     "tenant_id": "tenant_a",
     "recall_hit": true,
     "quality_hit": true,
-    "answer": "The bonus interest rate on the Skyline Saver account is 4.25% p.a. However, to receive the full bonus rate, the customer must meet certain conditions, including depositing at least $200 from an external source, making no more than 3 withdrawals, and keeping the closing balance higher than the opening balance. If any of these conditions are not met, the base rate of 0.5% p.a. applies for that month only."
+    "answer": "The bonus interest rate on the Skyline Saver account is 4.25% p.a. To receive this rate, you must deposit at least $200 from an external source, make no more than 3 withdrawals, and keep the closing balance higher than the opening balance in the same calendar month. If these conditions are not met, the base rate of 0.5% p.a. applies for that month."
   },
   {
     "id": "qa-2",
@@ -18,7 +18,7 @@
     "tenant_id": "tenant_b",
     "recall_hit": true,
     "quality_hit": true,
-    "answer": "The bonus interest rate on the Horizon Saver account is 5.10% p.a., but it is subject to certain conditions. To receive the full bonus rate, the customer must deposit at least $1,000 from an external source and make no more than 1 withdrawal in the same calendar month. If either condition is not met, the base rate of 0.10% p.a. applies for that month."
+    "answer": "The bonus interest rate on the Horizon Saver account is 5.10% p.a., but it is subject to certain conditions. To receive the full bonus rate, the customer must deposit at least $1,000 from an external source and make no more than 1 withdrawal in the same calendar month. If these conditions are not met, the base rate of 0.10% p.a. applies for that month."
   },
   {
     "id": "qa-4",

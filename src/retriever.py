@@ -32,7 +32,16 @@ from src.vector_store import SharedVectorStore
 
 
 class TenantIsolationViolation(RuntimeError):
-    """Raised if a retrieved hit's tenant_id does not match the requested tenant."""
+    """Raised if a retrieved hit's tenant_id does not match the requested
+    tenant. Carries structured attributes (not just a message string) so
+    callers like src/audit.py can record violation detail without
+    parsing exception text."""
+
+    def __init__(self, message: str, requested_tenant: str, hit_tenant: str | None, source: str | None):
+        super().__init__(message)
+        self.requested_tenant = requested_tenant
+        self.hit_tenant = hit_tenant
+        self.source = source
 
 
 @dataclass(frozen=True)
@@ -68,7 +77,10 @@ def retrieve(
                 f"Retrieval for tenant_id={tenant_id!r} returned a chunk tagged "
                 f"tenant_id={hit_tenant!r} (source={payload.get('source')!r}). "
                 "The vector store's tenant_id filter should have excluded this — "
-                "aborting rather than passing cross-tenant content to the LLM."
+                "aborting rather than passing cross-tenant content to the LLM.",
+                requested_tenant=tenant_id,
+                hit_tenant=hit_tenant,
+                source=payload.get("source"),
             )
         trace(
             f"[RETRIEVER]   ok: source={payload.get('source')!r} chunk={payload.get('chunk_index')} "
