@@ -49,11 +49,13 @@ def _store(settings: Settings) -> SharedVectorStore:
     return SharedVectorStore(settings=settings)
 
 
-def retrieve(tenant_id: str, query: str, settings: Settings, top_k: int = 5) -> list[RetrievedChunk]:
-    trace(f"[RETRIEVER] tenant={tenant_id!r} query={query!r} top_k={top_k}")
+def retrieve(
+    tenant_id: str, query: str, settings: Settings, top_k: int = 5, score_threshold: float = 0.5
+) -> list[RetrievedChunk]:
+    trace(f"[RETRIEVER] tenant={tenant_id!r} query={query!r} top_k={top_k} score_threshold={score_threshold}")
 
     store = _store(settings)
-    hits = store.hybrid_search(query, tenant_id=tenant_id, top_k=top_k)
+    hits = store.hybrid_search(query, tenant_id=tenant_id, top_k=top_k, score_threshold=score_threshold)
     trace(f"[RETRIEVER] hybrid_search (filtered to tenant_id={tenant_id!r}) returned {len(hits)} hit(s)")
 
     chunks: list[RetrievedChunk] = []

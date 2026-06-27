@@ -123,7 +123,17 @@ class SharedVectorStore:
         trace(f"[VECTOR_STORE] upserting {len(qdrant_points)} point(s) into shared collection")
         self._client.upsert(collection_name=COLLECTION_NAME, points=qdrant_points)
 
-    def hybrid_search(self, query: str, tenant_id: str, top_k: int = 5) -> list[models.ScoredPoint]:
+    def hybrid_search(
+        self, query: str, tenant_id: str, top_k: int = 5, score_threshold: float = 0.5
+    ) -> list[models.ScoredPoint]:
+        """score_threshold is applied to the fused RRF score, not the raw
+        dense/sparse scores (those are on incompatible scales — see
+        qdrant_client/hybrid/fusion.py). With our settings (no custom
+        weights or ranking_constant_k), RRF score per candidate = sum of
+        1/(rank+2) across whichever of the dense/sparse lists it appears
+        in, zero-indexed rank. Max per-list contribution is 1/(0+2)=0.5,
+        so a 0.5 threshold means: only keep candidates that are at least
+        as good as ranking #1 in one of the two retrieval methods alone."""
         validate_tenant(tenant_id)
         tenant_filter = _tenant_filter(tenant_id)
 
@@ -132,7 +142,8 @@ class SharedVectorStore:
         trace(
             f"[VECTOR_STORE] embedded query into dense({len(dense_vec)}-dim) + "
             f"sparse({len(sparse_vec.indices)} nonzero terms) vectors; prefetching top {top_k * 4} "
-            f"from each (filtered to tenant_id={tenant_id!r}), then RRF-fusing down to top {top_k}"
+            f"from each (filtered to tenant_id={tenant_id!r}), RRF-fusing, then keeping fused "
+            f"score >= {score_threshold} down to top {top_k}"
         )
 
         result = self._client.query_points(
@@ -156,6 +167,7 @@ class SharedVectorStore:
             ],
             query=models.FusionQuery(fusion=models.Fusion.RRF),
             query_filter=tenant_filter,
+            score_threshold=score_threshold,
             limit=top_k,
         )
         return result.points
