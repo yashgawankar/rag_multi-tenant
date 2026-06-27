@@ -1,15 +1,12 @@
-# Tenant B — Savings Account Terms (PLACEHOLDER DOC)
+# Horizon Bank — Horizon Saver Account Terms and Conditions
 
-> This is placeholder content used to exercise the pipeline before the real
-> Westpac-provided documents arrive. Replace the files in `data/tenant_a/`
-> and `data/tenant_b/` with the supplied docs, then re-run `scripts/ingest_all.py`.
-
-Tenant B's flagship product is the "Horizon Saver" account.
+Horizon Bank's flagship savings product is the Horizon Saver account.
 
 - Interest rate: 5.10% p.a., calculated daily, paid monthly.
 - No monthly account-keeping fee, regardless of balance.
-- Withdrawals: bonus rate is forfeited entirely if more than 1 withdrawal is
-  made in a calendar month (stricter than the Tenant A equivalent product).
+- Withdrawals: bonus rate is forfeited entirely if more than 1 withdrawal
+  is made in a calendar month (stricter than most comparable savings
+  accounts).
 - Minimum opening deposit: $0.
 - Available to both retail and business customers.
 
