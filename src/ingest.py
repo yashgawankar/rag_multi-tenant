@@ -29,6 +29,11 @@ def _stable_id(tenant_id: str, source: str, chunk_index: int) -> int:
 
 def ingest_tenant(tenant_id: str, docs_dir: Path, settings: Settings) -> int:
     store = SharedVectorStore(settings=settings)
+    # Re-ingestion must be idempotent in the face of edited/removed/renamed
+    # source files and chunking-strategy changes, none of which upsert
+    # alone can clean up (see SharedVectorStore.delete_tenant_data) — wipe
+    # this tenant's existing chunks before rebuilding from what's on disk.
+    store.delete_tenant_data(tenant_id)
 
     points = []
     for path in sorted(docs_dir.iterdir()):

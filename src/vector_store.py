@@ -95,6 +95,23 @@ class SharedVectorStore:
         )
         trace(f"[VECTOR_STORE] created collection {COLLECTION_NAME!r} with tenant_id payload index (is_tenant=True)")
 
+    def delete_tenant_data(self, tenant_id: str) -> None:
+        """Delete every point tagged with this tenant_id. Call before
+        re-ingesting a tenant's docs from scratch — upsert alone only
+        adds/overwrites points whose IDs match the current chunking; it
+        never removes a point whose source file was deleted or whose
+        chunk count shrank (e.g. a doc edit, or a chunking-strategy
+        change), so without this, stale chunks accumulate forever.
+        Confirmed this is a real bug, not hypothetical, by deleting a
+        test doc and re-running ingestion without this call: its old
+        chunk remained searchable indefinitely."""
+        validate_tenant(tenant_id)
+        trace(f"[VECTOR_STORE] deleting all existing points for tenant={tenant_id!r} before re-ingest")
+        self._client.delete(
+            collection_name=COLLECTION_NAME,
+            points_selector=_tenant_filter(tenant_id),
+        )
+
     def upsert_chunks(self, points: list[dict]) -> None:
         """points: [{"id": int, "text": str, "payload": {...}}]; payload MUST
         include a valid tenant_id — checked here as a last-resort guard
