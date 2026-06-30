@@ -29,7 +29,16 @@ def main() -> None:
         print(result["answer"])
         if result["retrieved"]:
             sources = ", ".join(f"{c.source}#{c.chunk_index}" for c in result["retrieved"])
-            print(f"  (sources: {sources})")
+            print(f"  (sources retrieved: {sources})")
+        for c in result["citations"]:
+            flag = "MISSING" if not c.exists else ("weak" if c.weakly_grounded else "ok")
+            print(f"  (cited [{c.source}#{c.chunk_index}] via {c.source_mechanism}: {flag})")
+        ar, fa = result["answer_relevance"], result["faithfulness"]
+        if ar is not None or fa is not None:
+            ar_s = f"{ar:.2f}" if ar is not None else "n/a"
+            fa_s = f"{fa:.2f}" if fa is not None else "n/a"
+            low = (ar is not None and ar < 0.5) or (fa is not None and fa < 0.5)
+            print(f"  (answer_relevance(Q<->A)={ar_s}  faithfulness(A<->C)={fa_s}{' — LOW, see audit log' if low else ''})")
         print()
 
 

@@ -52,6 +52,15 @@ def _sparse_embedder(model_name: str) -> SparseTextEmbedding:
     return SparseTextEmbedding(model_name=model_name)
 
 
+def embed_dense(texts: list[str], settings: Settings):
+    """Module-level accessor reusing the cached dense embedder singleton —
+    lets callers (citations.py's grounding checks, the runtime
+    faithfulness/relevance guardrail, eval/run_eval.py's RAGAS-style
+    metrics) embed arbitrary text for cosine similarity without
+    constructing a full SharedVectorStore/Qdrant client just to do it."""
+    return _dense_embedder(settings.embedding_model).embed(texts)
+
+
 def _tenant_filter(tenant_id: str) -> models.Filter:
     return models.Filter(
         must=[models.FieldCondition(key=TENANT_FIELD, match=models.MatchValue(value=tenant_id))]

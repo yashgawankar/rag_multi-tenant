@@ -4,13 +4,19 @@
     "tenant_id": "tenant_a",
     "recall_hit": true,
     "quality_hit": true,
-    "answer": "The bonus interest rate on the Skyline Saver account is 4.25% p.a. To receive this rate, you must deposit at least $200 from an external source, make no more than 3 withdrawals, and keep the closing balance higher than the opening balance in the same calendar month. If these conditions are not met, the base rate of 0.5% p.a. applies for that month."
+    "context_relevance": 0.8642054796218872,
+    "answer_relevance": 0.9168460965156555,
+    "faithfulness": 0.8221152424812317,
+    "answer": "The bonus interest rate on the Skyline Saver account is 4.25% p.a."
   },
   {
     "id": "qa-2",
     "tenant_id": "tenant_a",
     "recall_hit": true,
     "quality_hit": true,
+    "context_relevance": 0.8706827163696289,
+    "answer_relevance": 0.9464029669761658,
+    "faithfulness": 0.8632897138595581,
     "answer": "The annual fee on the Skyline Rewards credit card is $129, waived in year 1 for new customers."
   },
   {
@@ -18,13 +24,19 @@
     "tenant_id": "tenant_b",
     "recall_hit": true,
     "quality_hit": true,
-    "answer": "The bonus interest rate on the Horizon Saver account is 5.10% p.a., but it is subject to certain conditions. To receive the full bonus rate, the customer must deposit at least $1,000 from an external source and make no more than 1 withdrawal in the same calendar month. If these conditions are not met, the base rate of 0.10% p.a. applies for that month."
+    "context_relevance": 0.8788338303565979,
+    "answer_relevance": 0.913887619972229,
+    "faithfulness": 0.8207233548164368,
+    "answer": "The bonus interest rate on the Horizon Saver account is 5.10% p.a."
   },
   {
     "id": "qa-4",
     "tenant_id": "tenant_b",
     "recall_hit": true,
     "quality_hit": true,
+    "context_relevance": 0.7527512907981873,
+    "answer_relevance": 0.8604015111923218,
+    "faithfulness": 0.7162995934486389,
     "answer": "You have 60 days to lodge a transaction dispute."
   },
   {
@@ -32,6 +44,9 @@
     "tenant_id": "tenant_a",
     "recall_hit": true,
     "quality_hit": true,
+    "context_relevance": 0.7454916834831238,
+    "answer_relevance": 0.8553252816200256,
+    "faithfulness": 0.7456454634666443,
     "answer": "You have 45 days to lodge a transaction dispute."
   }
 ]

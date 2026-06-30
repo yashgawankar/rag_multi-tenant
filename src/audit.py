@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.citations import CitationCheck
 from src.retriever import RetrievedChunk
 
 _write_lock = threading.Lock()
@@ -48,9 +49,37 @@ class AuditRecord:
     retrieved: list[dict] = field(default_factory=list)
     isolation_violations: list[dict] = field(default_factory=list)
     answer: str | None = None
+    submit_answer_status: str | None = None  # "ok" | "malformed" | "not_called"
+    submit_answer_error: str | None = None
+    citation_checks: list[dict] = field(default_factory=list)
+    answer_relevance: float | None = None  # Q<->A
+    faithfulness: float | None = None  # A<->C
 
     def record_tool_call(self, name: str, arguments: dict) -> None:
         self.tool_calls.append({"name": name, "arguments": arguments})
+
+    def record_submit_answer_status(self, status: str, error: str | None = None) -> None:
+        self.submit_answer_status = status
+        self.submit_answer_error = error
+
+    def record_citation_checks(self, checks: list[CitationCheck]) -> None:
+        for c in checks:
+            self.citation_checks.append(
+                {
+                    "source": c.source,
+                    "chunk_index": c.chunk_index,
+                    "exists": c.exists,
+                    "source_mechanism": c.source_mechanism,
+                    "claim": c.claim,
+                    "token_overlap_score": c.token_overlap_score,
+                    "cosine_score": c.cosine_score,
+                    "weakly_grounded": c.weakly_grounded,
+                }
+            )
+
+    def record_guardrail(self, answer_relevance: float | None, faithfulness: float | None) -> None:
+        self.answer_relevance = answer_relevance
+        self.faithfulness = faithfulness
 
     def record_retrieved_chunks(self, chunks: list[RetrievedChunk]) -> None:
         for c in chunks:
@@ -84,6 +113,12 @@ class AuditRecord:
             "isolation_ok": len(self.isolation_violations) == 0,
             "isolation_violations": self.isolation_violations,
             "answer": self.answer,
+            "submit_answer_status": self.submit_answer_status,
+            "submit_answer_error": self.submit_answer_error,
+            "citation_checks": self.citation_checks,
+            "citations_ok": all(c["exists"] for c in self.citation_checks),
+            "answer_relevance": self.answer_relevance,
+            "faithfulness": self.faithfulness,
         }
 
 

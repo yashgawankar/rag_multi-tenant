@@ -25,5 +25,11 @@ class LLMClient:
         return self._client.chat.completions.create(
             model=self._model,
             messages=messages,
+            # Deterministic output for factual banking Q&A — same question
+            # should give the same answer every time, not vary run to run.
+            # Doesn't fix hallucination/underclaiming on its own (those are
+            # separate, harder problems — see guardrails discussion), but
+            # it's a free, standard baseline for this kind of task.
+            temperature=0,
             **kwargs,
         )
