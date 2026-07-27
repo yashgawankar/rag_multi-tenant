@@ -7,9 +7,11 @@ import sys
 
 from src.agent import Agent
 from src.config import TENANTS
+from src.trace import configure_console_encoding
 
 
 def main() -> None:
+    configure_console_encoding()
     if len(sys.argv) != 2 or sys.argv[1] not in TENANTS:
         print(f"Usage: python -m scripts.chat <tenant_id>  (one of {TENANTS})")
         sys.exit(1)
@@ -38,7 +40,7 @@ def main() -> None:
             ar_s = f"{ar:.2f}" if ar is not None else "n/a"
             fa_s = f"{fa:.2f}" if fa is not None else "n/a"
             low = (ar is not None and ar < 0.5) or (fa is not None and fa < 0.5)
-            print(f"  (answer_relevance(Q<->A)={ar_s}  faithfulness(A<->C)={fa_s}{' — LOW, see audit log' if low else ''})")
+            print(f"  (answer_relevance(Q<->A)={ar_s}  faithfulness(A<->C)={fa_s}{' - LOW, see audit log' if low else ''})")
         print()
 
 

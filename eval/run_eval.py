@@ -28,8 +28,14 @@ to a "tiny eval," no extra API spend, no judge-model variance):
 Reported separately per question, not blended into one composite score:
 a single number can't show which of the three failed.
 
-PLACEHOLDER NOTE: eval/qa_pairs.json currently targets the placeholder docs
-in data/. Replace both once the real Westpac docs + Q/A pairs arrive.
+Also reports a reranker on/off comparison — retrieval-only (no extra LLM
+calls, since reranking only affects retrieval ordering, not generation):
+Recall@k with/without, and whether the expected chunk's RANK POSITION
+moved, which is a more informative signal than Recall@k alone at this
+corpus size (~4-5 docs/tenant), where the expected chunk is almost always
+present in top-k regardless — the real question is whether reranking
+changes ORDER, not presence. This is the empirical evidence for "implement
+reranking and justify your choice," rather than an assertion either way.
 
 Usage:
     python -m eval.run_eval
@@ -44,12 +50,55 @@ from src.agent import Agent
 from src.citations import cosine_similarity
 from src.config import Settings
 from src.retriever import retrieve
+from src.trace import configure_console_encoding
 
 TOP_K = 5
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
+def _rank_of_expected(chunks, expected_source: str) -> int | None:
+    """1-indexed rank position of the first chunk from expected_source, or
+    None if it isn't present at all in this result set."""
+    for i, c in enumerate(chunks, start=1):
+        if c.source == expected_source:
+            return i
+    return None
+
+
+def run_rerank_comparison(qa_pairs: list[dict], settings: Settings) -> None:
+    print("\n=== Reranker comparison (retrieval-only, no extra LLM calls) ===")
+    recall_off = recall_on = 0
+    rank_moved = 0
+    n = len(qa_pairs)
+
+    for qa in qa_pairs:
+        chunks_off = retrieve(qa["tenant_id"], qa["question"], settings, top_k=TOP_K, rerank=False)
+        chunks_on = retrieve(qa["tenant_id"], qa["question"], settings, top_k=TOP_K, rerank=True)
+
+        rank_off = _rank_of_expected(chunks_off, qa["expected_source"])
+        rank_on = _rank_of_expected(chunks_on, qa["expected_source"])
+        recall_off += rank_off is not None
+        recall_on += rank_on is not None
+        if rank_off != rank_on:
+            rank_moved += 1
+
+        print(f"[{qa['id']}] expected={qa['expected_source']!r}  rank_without_rerank={rank_off}  rank_with_rerank={rank_on}")
+
+    print(f"\nRecall@{TOP_K} without rerank: {recall_off}/{n} = {recall_off / n:.2f}")
+    print(f"Recall@{TOP_K} with rerank:    {recall_on}/{n} = {recall_on / n:.2f}")
+    print(f"Questions where the expected chunk's rank position changed: {rank_moved}/{n}")
+    if rank_moved == 0:
+        print(
+            "No rank changes observed - consistent with our own reasoning that a "
+            "~4-5 doc/tenant corpus is too small for reranking to matter here; "
+            "kept off by default (RERANK_ENABLED=0) but pluggable rather than "
+            "removed entirely, since a larger real corpus is exactly where this "
+            "would start to help."
+        )
+
+
 def main() -> None:
+    configure_console_encoding()
     settings = Settings()
     qa_pairs = json.loads((REPO_ROOT / "eval" / "qa_pairs.json").read_text())
 
@@ -114,6 +163,8 @@ def main() -> None:
     print(f"faithfulness      (avg, A<->C): {_avg(faithfulnesses)}")
 
     (REPO_ROOT / "eval" / "results.json").write_text(json.dumps(rows, indent=2))
+
+    run_rerank_comparison(qa_pairs, settings)
 
 
 if __name__ == "__main__":

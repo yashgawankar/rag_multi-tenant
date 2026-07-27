@@ -28,7 +28,13 @@ from src.citations import COSINE_THRESHOLD, CitationCheck, cosine_similarity, ve
 from src.config import Settings
 from src.llm import LLMClient
 from src.retriever import RetrievedChunk, TenantIsolationViolation, retrieve
-from src.tools import GET_ACCOUNT_BALANCE_SCHEMA, get_account_balance
+from src.tools import (
+    AccountNotFoundError,
+    CrossTenantAccessError,
+    GET_ACCOUNT_BALANCE_SCHEMA,
+    UnknownTenantError,
+    get_account_balance,
+)
 from src.trace import trace
 
 # Same provisional threshold as citations.COSINE_THRESHOLD, shared until
@@ -186,9 +192,31 @@ class Agent:
             # arguments only ever contains "account_id" — tenant_id isn't in
             # the tool's schema (src/tools.py), so the model never supplies
             # one. We pass the session's real tenant_id here ourselves.
-            result = get_account_balance(tenant_id=self.tenant_id, account_id=arguments["account_id"])
-            trace(f"[AGENT] << get_account_balance returning {result}")
-            return json.dumps(result), []
+            account_id = arguments["account_id"]
+            try:
+                result = get_account_balance(tenant_id=self.tenant_id, account_id=account_id)
+                trace(f"[AGENT] << get_account_balance returning {result}")
+                return json.dumps(result), []
+            except CrossTenantAccessError:
+                # mock_tool's own guardrail correctly refusing a request for
+                # an account belonging to a different tenant — no data was
+                # leaked, this is the tool working exactly as designed. Not
+                # the same severity as TenantIsolationViolation (which means
+                # OUR filter failed); logged to a distinct audit field and
+                # the loop continues normally rather than aborting.
+                trace(f"[AGENT] !! cross-tenant access attempt: tenant={self.tenant_id!r} account_id={account_id!r} !!")
+                record.record_cross_tenant_access_attempt(self.tenant_id, account_id)
+                # Deliberately generic — never reveals which tenant the
+                # account actually belongs to.
+                return "That account is not associated with your tenant.", []
+            except AccountNotFoundError:
+                trace(f"[AGENT] << get_account_balance: no such account {account_id!r}")
+                return "No account found with that ID.", []
+            except UnknownTenantError:
+                # Defensive only — should be unreachable since self.tenant_id
+                # is always one of the two known tenants (see config.TENANTS).
+                trace(f"[AGENT] !! unexpected UnknownTenantError for tenant={self.tenant_id!r} !!")
+                return "Unable to look up account information right now.", []
 
         raise ValueError(f"Unknown tool: {name}")
 

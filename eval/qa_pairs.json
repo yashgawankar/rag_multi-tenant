@@ -2,36 +2,36 @@
   {
     "id": "qa-1",
     "tenant_id": "tenant_a",
-    "question": "What is the bonus interest rate on the Skyline Saver account?",
-    "expected_source": "savings_account_terms.md",
+    "question": "What is the bonus interest rate on the Acme Saver account?",
+    "expected_source": "product-terms.md",
     "expected_keywords": ["4.25"]
   },
   {
     "id": "qa-2",
     "tenant_id": "tenant_a",
-    "question": "What is the annual fee on the Skyline Rewards credit card?",
-    "expected_source": "credit_card_rewards.md",
-    "expected_keywords": ["129"]
+    "question": "How much is the replacement card fee at Acme Bank?",
+    "expected_source": "fees.md",
+    "expected_keywords": ["10"]
   },
   {
     "id": "qa-3",
-    "tenant_id": "tenant_b",
-    "question": "What is the bonus interest rate on the Horizon Saver account?",
-    "expected_source": "savings_account_terms.md",
-    "expected_keywords": ["5.10"]
+    "tenant_id": "tenant_a",
+    "question": "How many business days can a disputed card transaction refund take while under investigation?",
+    "expected_source": "refund-policy.md",
+    "expected_keywords": ["21"]
   },
   {
     "id": "qa-4",
     "tenant_id": "tenant_b",
-    "question": "How many days do I have to lodge a transaction dispute?",
-    "expected_source": "dispute_process.md",
-    "expected_keywords": ["60"]
+    "question": "What is the excess on a windscreen-only claim at Globex Motor?",
+    "expected_source": "faq.md",
+    "expected_keywords": ["100"]
   },
   {
     "id": "qa-5",
-    "tenant_id": "tenant_a",
-    "question": "How many days do I have to lodge a transaction dispute?",
-    "expected_source": "dispute_process.md",
-    "expected_keywords": ["45"]
+    "tenant_id": "tenant_b",
+    "question": "What is the standard motor excess for a Globex Insurance claim?",
+    "expected_source": "claims-policy.md",
+    "expected_keywords": ["750"]
   }
 ]

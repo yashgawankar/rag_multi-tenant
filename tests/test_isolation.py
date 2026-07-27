@@ -17,8 +17,12 @@ settings = Settings()
 @pytest.mark.parametrize(
     "asking_tenant,forbidden_term,other_only_query",
     [
-        ("tenant_a", "horizon", "Horizon Saver Horizon Plus"),
-        ("tenant_b", "skyline", "Skyline Saver Skyline Rewards"),
+        # tenant_a = Acme Bank, tenant_b = Globex Insurance (real assignment
+        # data) — queries use terms that only exist in the OTHER tenant's
+        # real docs, so a forbidden_term hit would prove an actual leak,
+        # not just "these words don't exist anywhere."
+        ("tenant_a", "globex", "Globex Motor windscreen excess claim"),
+        ("tenant_b", "acme", "Acme Everyday Saver account fees"),
     ],
 )
 def test_no_cross_tenant_hits(asking_tenant, forbidden_term, other_only_query):

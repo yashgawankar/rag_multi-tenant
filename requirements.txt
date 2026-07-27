@@ -3,3 +3,4 @@ fastembed>=0.3
 openai>=1.30
 python-dotenv>=1.0
 pypdf>=4.0
+flashrank>=0.2

@@ -4,49 +4,49 @@
     "tenant_id": "tenant_a",
     "recall_hit": true,
     "quality_hit": true,
-    "context_relevance": 0.8642054796218872,
-    "answer_relevance": 0.9168460965156555,
-    "faithfulness": 0.8221152424812317,
-    "answer": "The bonus interest rate on the Skyline Saver account is 4.25% p.a."
+    "context_relevance": 0.8115519881248474,
+    "answer_relevance": 0.852846086025238,
+    "faithfulness": 0.6965219974517822,
+    "answer": "The bonus interest rate on the Acme Saver account is 4.25% per annum when the conditions are met."
   },
   {
     "id": "qa-2",
     "tenant_id": "tenant_a",
     "recall_hit": true,
     "quality_hit": true,
-    "context_relevance": 0.8706827163696289,
-    "answer_relevance": 0.9464029669761658,
-    "faithfulness": 0.8632897138595581,
-    "answer": "The annual fee on the Skyline Rewards credit card is $129, waived in year 1 for new customers."
+    "context_relevance": 0.8587378859519958,
+    "answer_relevance": 0.8148764371871948,
+    "faithfulness": 0.6739751696586609,
+    "answer": "The replacement card fee is $10.00."
   },
   {
     "id": "qa-3",
-    "tenant_id": "tenant_b",
+    "tenant_id": "tenant_a",
     "recall_hit": true,
     "quality_hit": true,
-    "context_relevance": 0.8788338303565979,
-    "answer_relevance": 0.913887619972229,
-    "faithfulness": 0.8207233548164368,
-    "answer": "The bonus interest rate on the Horizon Saver account is 5.10% p.a."
+    "context_relevance": 0.7407519817352295,
+    "answer_relevance": 0.9333076477050781,
+    "faithfulness": 0.7576799988746643,
+    "answer": "A disputed card transaction refund can take up to 21 business days while it is under investigation."
   },
   {
     "id": "qa-4",
     "tenant_id": "tenant_b",
     "recall_hit": true,
     "quality_hit": true,
-    "context_relevance": 0.7527512907981873,
-    "answer_relevance": 0.8604015111923218,
-    "faithfulness": 0.7162995934486389,
-    "answer": "You have 60 days to lodge a transaction dispute."
+    "context_relevance": 0.8365578651428223,
+    "answer_relevance": 0.8826137185096741,
+    "faithfulness": 0.7280107140541077,
+    "answer": "The excess on a windscreen-only claim at Globex Motor is $100."
   },
   {
     "id": "qa-5",
-    "tenant_id": "tenant_a",
+    "tenant_id": "tenant_b",
     "recall_hit": true,
     "quality_hit": true,
-    "context_relevance": 0.7454916834831238,
-    "answer_relevance": 0.8553252816200256,
-    "faithfulness": 0.7456454634666443,
-    "answer": "You have 45 days to lodge a transaction dispute."
+    "context_relevance": 0.8391295671463013,
+    "answer_relevance": 0.943888247013092,
+    "faithfulness": 0.8096153140068054,
+    "answer": "The standard motor excess for a Globex Insurance claim is $750."
   }
 ]

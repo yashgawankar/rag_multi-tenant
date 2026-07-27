@@ -18,6 +18,11 @@ class Settings:
     embedding_model: str = os.environ.get("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
     sparse_embedding_model: str = os.environ.get("SPARSE_EMBEDDING_MODEL", "Qdrant/bm25")
 
+    # Off by default: our corpus is ~4-5 docs/tenant, too small for a
+    # reranker to reliably move top-k ordering — see eval/run_eval.py's
+    # on/off comparison for the measured evidence, not just an assertion.
+    rerank_enabled: bool = os.environ.get("RERANK_ENABLED", "0") == "1"
+
 
 def validate_tenant(tenant_id: str) -> None:
     """Stand-in for a real tenant registry lookup (see README). Every

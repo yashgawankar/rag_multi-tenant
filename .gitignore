@@ -8,3 +8,5 @@ storage/
 audit/
 *.egg-info/
 .pytest_cache/
+.flashrank_cache/
+data/data_readme.zip

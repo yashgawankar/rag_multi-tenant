@@ -30,6 +30,12 @@ from src.config import Settings
 from src.trace import trace
 from src.vector_store import SharedVectorStore
 
+# reranker imported lazily inside retrieve() instead of at module level —
+# reranker.py imports flashrank, and retriever.py should stay importable
+# (and its own tests runnable) even in an environment where flashrank
+# isn't installed, since reranking is an optional, off-by-default
+# pluggable feature, not a hard dependency of retrieval itself.
+
 
 class TenantIsolationViolation(RuntimeError):
     """Raised if a retrieved hit's tenant_id does not match the requested
@@ -59,12 +65,30 @@ def _store(settings: Settings) -> SharedVectorStore:
 
 
 def retrieve(
-    tenant_id: str, query: str, settings: Settings, top_k: int = 5, score_threshold: float = 0.5
+    tenant_id: str,
+    query: str,
+    settings: Settings,
+    top_k: int = 5,
+    score_threshold: float = 0.5,
+    rerank: bool | None = None,
 ) -> list[RetrievedChunk]:
-    trace(f"[RETRIEVER] tenant={tenant_id!r} query={query!r} top_k={top_k} score_threshold={score_threshold}")
+    """rerank: None (default) reads Settings.rerank_enabled; True/False
+    overrides it explicitly — used by eval/run_eval.py to run the same
+    questions with reranking on vs. off for a measured comparison, rather
+    than asserting whether it helps at this corpus size."""
+    use_rerank = settings.rerank_enabled if rerank is None else rerank
+    fetch_k = top_k
+    if use_rerank:
+        from src.reranker import RERANK_CANDIDATE_MULTIPLIER
+
+        fetch_k = top_k * RERANK_CANDIDATE_MULTIPLIER
+    trace(
+        f"[RETRIEVER] tenant={tenant_id!r} query={query!r} top_k={top_k} "
+        f"score_threshold={score_threshold} rerank={use_rerank}"
+    )
 
     store = _store(settings)
-    hits = store.hybrid_search(query, tenant_id=tenant_id, top_k=top_k, score_threshold=score_threshold)
+    hits = store.hybrid_search(query, tenant_id=tenant_id, top_k=fetch_k, score_threshold=score_threshold)
     trace(f"[RETRIEVER] hybrid_search (filtered to tenant_id={tenant_id!r}) returned {len(hits)} hit(s)")
 
     chunks: list[RetrievedChunk] = []
@@ -95,4 +119,17 @@ def retrieve(
                 tenant_id=hit_tenant,
             )
         )
+
+    if use_rerank and chunks:
+        # fetch_k > top_k only in this branch (see above), so this is the
+        # step that actually truncates back down to top_k; when reranking
+        # is off, hybrid_search already returned at most top_k directly.
+        from src.reranker import rerank as rerank_fn
+
+        chunks = rerank_fn(query, chunks, top_n=top_k)
+        trace(
+            f"[RETRIEVER] reranked down to top {len(chunks)}: "
+            + ", ".join(f"{c.source}#{c.chunk_index}={c.score:.3f}" for c in chunks)
+        )
+
     return chunks

@@ -48,6 +48,7 @@ class AuditRecord:
     tool_calls: list[dict] = field(default_factory=list)
     retrieved: list[dict] = field(default_factory=list)
     isolation_violations: list[dict] = field(default_factory=list)
+    cross_tenant_access_attempts: list[dict] = field(default_factory=list)
     answer: str | None = None
     submit_answer_status: str | None = None  # "ok" | "malformed" | "not_called"
     submit_answer_error: str | None = None
@@ -100,6 +101,17 @@ class AuditRecord:
             {"requested_tenant": requested_tenant, "hit_tenant": hit_tenant, "source": source}
         )
 
+    def record_cross_tenant_access_attempt(self, requested_tenant: str, account_id: str) -> None:
+        """Distinct from record_isolation_violation: isolation_violations
+        means our own retrieval filter failed (should never happen — a
+        five-alarm bug). This means mock_tool's own guardrail CORRECTLY
+        refused a request for an account belonging to a different tenant —
+        no data was leaked, the tool worked exactly as designed. Logged
+        separately so the two are never conflated in the audit trail."""
+        self.cross_tenant_access_attempts.append(
+            {"requested_tenant": requested_tenant, "account_id": account_id}
+        )
+
     def finalize(self, answer: str | None) -> None:
         self.answer = answer
 
@@ -112,6 +124,7 @@ class AuditRecord:
             "retrieved": self.retrieved,
             "isolation_ok": len(self.isolation_violations) == 0,
             "isolation_violations": self.isolation_violations,
+            "cross_tenant_access_attempts": self.cross_tenant_access_attempts,
             "answer": self.answer,
             "submit_answer_status": self.submit_answer_status,
             "submit_answer_error": self.submit_answer_error,
