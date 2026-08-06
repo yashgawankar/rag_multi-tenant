@@ -286,7 +286,7 @@ become shared, properly-sized caches or a dedicated embedding service.
 **Cost, latency, observability in production:** embedding is local and
 free today (fastembed, CPU-only, no API cost); the real per-request cost
 is the LLM call, so caching identical questions and capping the
-tool-call loop (already bounded at 4 iterations) both matter directly at
+tool-call loop (already bounded at 5 iterations) both matter directly at
 scale. The structured JSON audit log is the seed of real observability —
 in production it would ship to a log pipeline rather than local files, with
 the isolation-violation and cross-tenant-attempt fields wired to alerts

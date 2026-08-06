@@ -208,3 +208,10 @@ class SharedVectorStore:
         used as chunking.py's length_fn so chunks never exceed that
         unnoticed, instead of approximating with character count)."""
         return self._dense.token_count([text])
+
+    def close(self) -> None:
+        """Explicitly release the embedded Qdrant client's file lock.
+        See retriever.close_store() for why callers should invoke this
+        themselves at normal process exit rather than relying on
+        QdrantClient.__del__ during interpreter shutdown."""
+        self._client.close()

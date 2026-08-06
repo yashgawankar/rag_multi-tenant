@@ -64,6 +64,31 @@ def _store(settings: Settings) -> SharedVectorStore:
     return SharedVectorStore(settings=settings)
 
 
+def close_store(settings: Settings) -> None:
+    """Explicitly close the cached SharedVectorStore's Qdrant client, if
+    one was ever created for this settings (a no-op otherwise — a chat
+    session that only ever called get_account_balance never touches the
+    vector store at all).
+
+    Call this at normal process exit (see scripts/chat.py, eval/run_eval.py)
+    instead of letting the process fall through to interpreter shutdown.
+    QdrantClient itself defines a __del__ that calls close() as a
+    last-resort safety net, but @lru_cache(maxsize=1) on _store keeps this
+    object alive for the whole process, so __del__ only ever fires during
+    interpreter teardown — by which point some stdlib internals (e.g.
+    sys.meta_path) are already gone, and close() raises an ImportError
+    from inside __del__. Python can't propagate an exception out of a
+    finalizer, so it prints "Exception ignored in: ..." to stderr instead
+    and moves on; harmless (no corrupted state, no nonzero exit code), but
+    alarming to see after pressing Ctrl+C. Closing here, on a live
+    interpreter, avoids relying on __del__ at all.
+    """
+    if _store.cache_info().currsize == 0:
+        return
+    _store(settings).close()
+    _store.cache_clear()
+
+
 def retrieve(
     tenant_id: str,
     query: str,

@@ -49,7 +49,7 @@ from src import vector_store
 from src.agent import Agent
 from src.citations import cosine_similarity
 from src.config import Settings
-from src.retriever import retrieve
+from src.retriever import close_store, retrieve
 from src.trace import configure_console_encoding
 
 TOP_K = 5
@@ -165,6 +165,9 @@ def main() -> None:
     (REPO_ROOT / "eval" / "results.json").write_text(json.dumps(rows, indent=2))
 
     run_rerank_comparison(qa_pairs, settings)
+    # See retriever.close_store(): closes the cached Qdrant client on this
+    # still-live interpreter rather than relying on __del__ during shutdown.
+    close_store(settings)
 
 
 if __name__ == "__main__":

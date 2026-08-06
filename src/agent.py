@@ -315,7 +315,7 @@ class Agent:
         tools = [SEARCH_DOCS_SCHEMA, GET_ACCOUNT_BALANCE_SCHEMA, SUBMIT_ANSWER_SCHEMA]
         retrieved_chunks: list[RetrievedChunk] = []
 
-        for iteration in range(4):  # bounded loop, avoids runaway tool-calling
+        for iteration in range(5):  # bounded loop, avoids runaway tool-calling
             trace(f"[AGENT] --- loop iteration {iteration}: calling LLM ---")
             try:
                 response = self.llm.chat(messages, tools=tools)
@@ -371,7 +371,7 @@ class Agent:
                     {"role": "tool", "tool_call_id": call.id, "content": tool_result}
                 )
 
-        trace("[AGENT] !! exhausted tool-call budget (4 iterations) without a final answer")
+        trace("[AGENT] !! exhausted tool-call budget (5 iterations) without a final answer")
         return self._finalize_not_called(
             "I wasn't able to resolve this within the tool-call budget.", question, retrieved_chunks, record
         )
