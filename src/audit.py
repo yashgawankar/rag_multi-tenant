@@ -50,7 +50,7 @@ class AuditRecord:
     isolation_violations: list[dict] = field(default_factory=list)
     cross_tenant_access_attempts: list[dict] = field(default_factory=list)
     answer: str | None = None
-    submit_answer_status: str | None = None  # "ok" | "malformed" | "not_called"
+    submit_answer_status: str | None = None  # "ok" | "malformed" | "not_called" | "llm_error"
     submit_answer_error: str | None = None
     citation_checks: list[dict] = field(default_factory=list)
     answer_relevance: float | None = None  # Q<->A

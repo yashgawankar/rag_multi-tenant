@@ -12,15 +12,23 @@ real tenant_id itself, from the session, every time the tool is called.
 Final answers are finalized via a forced `submit_answer` tool call rather
 than plain text, so citations arrive as structured, schema-validated data
 (source/chunk_index/claim) instead of being regex-parsed out of free
-prose. Two independent things can go wrong with this, logged separately
+prose. Three independent things can go wrong with this, logged separately
 (see _finalize* methods and src/citations.py): the model might not call
-submit_answer at all (submit_answer_status="not_called"), or it might call
-it with malformed arguments (submit_answer_status="malformed") — neither
-is assumed away, both degrade gracefully rather than crashing the request.
+submit_answer at all (submit_answer_status="not_called"), it might call it
+with arguments that parse but don't fit the schema (submit_answer_status=
+"malformed"), or the provider's own function-calling layer might reject
+the raw generation before it ever reaches us as a normal response
+(submit_answer_status="llm_error" — observed in practice from
+openai/gpt-oss-20b on Groq occasionally emitting its whole tool-call
+envelope, `{"name": ..., "arguments": ...}`, as the arguments string
+itself). None of these is assumed away; all three degrade to a plain
+apology answer rather than crashing the request.
 """
 from __future__ import annotations
 
 import json
+
+from openai import BadRequestError
 
 from src import vector_store
 from src.audit import AuditRecord, write_audit_record
@@ -309,7 +317,25 @@ class Agent:
 
         for iteration in range(4):  # bounded loop, avoids runaway tool-calling
             trace(f"[AGENT] --- loop iteration {iteration}: calling LLM ---")
-            response = self.llm.chat(messages, tools=tools)
+            try:
+                response = self.llm.chat(messages, tools=tools)
+            except BadRequestError as e:
+                # The provider's own function-calling layer rejected what
+                # the model generated (e.g. it emitted a malformed or
+                # wrongly-shaped tool-call payload) before we ever got a
+                # normal response back — nothing to retry against inside
+                # this loop, and no partial answer to salvage. Degrade the
+                # same way an exhausted tool-call budget does, rather than
+                # letting an openai.BadRequestError crash the whole request.
+                trace(f"[AGENT] !! LLM API rejected the model's generation: {e} !!")
+                record.record_submit_answer_status("llm_error", str(e))
+                return self._finalize(
+                    "Something went wrong generating a response. Please try rephrasing your question.",
+                    [],
+                    question,
+                    retrieved_chunks,
+                    record,
+                )
             message = response.choices[0].message
             trace(
                 f"[AGENT] raw message from API: role={message.role!r} "

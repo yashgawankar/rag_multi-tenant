@@ -1,11 +1,14 @@
-"""Tests for the three submit_answer_status paths in Agent.ask() — the
+"""Tests for the four submit_answer_status paths in Agent.ask() — the
 model calling submit_answer cleanly, calling it with malformed
-arguments, and not calling it at all. The LLM call itself is mocked
+arguments, not calling it at all, and the LLM provider itself rejecting
+the model's tool-call generation. The LLM call itself is mocked
 (SimpleNamespace fakes matching the openai SDK response shape) so these
 run fast, deterministically, with no API key or network dependency —
 embeddings still run for real locally (fastembed, no network either).
 """
 from types import SimpleNamespace
+
+from openai import BadRequestError
 
 from src.agent import FEW_SHOT_EXAMPLE, Agent
 
@@ -78,6 +81,28 @@ def test_submit_answer_status_not_called(monkeypatch):
 
     assert result["answer"] == "The fee is $129."
     assert _CAPTURED[-1].submit_answer_status == "not_called"
+
+
+def test_submit_answer_status_llm_error(monkeypatch):
+    # Observed in practice: the provider's own function-calling layer
+    # rejects the model's raw generation (e.g. openai/gpt-oss-20b on Groq
+    # occasionally emits its whole tool-call envelope as the arguments
+    # string) and raises before a normal response ever comes back.
+    import httpx
+
+    request = httpx.Request("POST", "https://example.invalid/chat/completions")
+    response = httpx.Response(400, request=request)
+    error = BadRequestError("Failed to parse tool call arguments as JSON", response=response, body=None)
+
+    def fake_chat(messages, tools=None, tool_choice="auto"):
+        raise error
+
+    agent = _agent_with_mocked_llm(monkeypatch, fake_chat)
+    result = agent.ask("What is the fee?")
+
+    assert _CAPTURED[-1].submit_answer_status == "llm_error"
+    assert _CAPTURED[-1].submit_answer_error is not None
+    assert result["answer"]  # never crashes, never returns None/empty
 
 
 def test_few_shot_example_present_in_constructed_messages(monkeypatch):
