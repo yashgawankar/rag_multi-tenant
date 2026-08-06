@@ -6,6 +6,57 @@ Insurance). The agent answers questions from each tenant's own documents,
 or by calling a mock `get_account_balance` tool, and never lets one
 tenant's data reach the other's session.
 
+## Architecture
+
+```mermaid
+flowchart TD
+    subgraph ING["Ingestion"]
+        direction TB
+        A1["scripts/ingest_all.py"] --> A2["src/config.py<br/>TENANTS registry"]
+        A2 --> A3["src/ingest.py<br/>read + delete_tenant_data()"]
+        A3 --> A4["src/chunking.py<br/>chunk_text()"]
+        A4 --> A5["src/vector_store.py<br/>embed + upsert"]
+        A5 --> A6[["Qdrant collection<br/>tenant_id in payload"]]
+    end
+
+    subgraph QRY["Query"]
+        direction TB
+        B1["scripts/chat.py"] --> B2["src/agent.py<br/>Agent.ask() loop"]
+        B2 --> B3["src/llm.py<br/>LLMClient.chat()"]
+        B3 -. tool_calls .-> B2
+
+        B2 --> C1["search_docs"]
+        C1 --> C2["src/retriever.py<br/>retrieve()"]
+        C2 --> C3["src/vector_store.py<br/>hybrid_search()<br/>tenant_id filter"]
+        C3 --> C2
+        C2 --> C4{{"per-hit tenant_id<br/>assertion"}}
+        C4 --> C5["src/reranker.py<br/>optional"]
+
+        B2 --> D1["get_account_balance"]
+        D1 --> D2["src/tools.py<br/>schema excludes tenant_id"]
+        D2 --> D3["mock_tool.py<br/>CrossTenantAccessError guard"]
+
+        B2 --> E1["submit_answer"]
+        E1 --> E2["src/citations.py<br/>Tier 1 + Tier 2 checks"]
+
+        C5 --> F1(["src/audit.py + src/trace.py<br/>every turn"])
+        D3 --> F1
+        E2 --> F1
+    end
+
+    A6 -.-> C3
+
+    classDef isolation fill:#5647C7,color:#fff,stroke:#3a2f9e
+    classDef guardrail fill:#B8792E,color:#fff,stroke:#8a5c20
+    class A2,A5,A6,C3,C4,D2,D3 isolation
+    class E2,F1 guardrail
+```
+
+Indigo = tenant-isolation checkpoint. Ochre = grounding/guardrail
+checkpoint. See [Isolation approach](#isolation-approach) and
+[Grounded answers and guardrails](#grounded-answers-and-guardrails) below
+for what each checkpoint actually does.
+
 ## Requirements
 
 - Python 3.11+
