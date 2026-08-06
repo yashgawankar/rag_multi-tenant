@@ -49,11 +49,28 @@ def test_overlap_carries_context_into_next_chunk():
     chunks = chunk_text(text, target_size=len(para1) + 1, overlap_chars=20)
     assert len(chunks) == 2
     assert "ZZZMARKERZZZ" in chunks[0].text
-    # chunk 2 should start with the literal last-20-chars tail of chunk 1,
-    # which is how _pack constructs the overlap — not just "contains the
-    # marker somewhere," but specifically carries that exact tail forward.
-    assert chunks[1].text.startswith(para1[-20:])
+    # raw para1[-20:] is "t ZZZMARKERZZZ here." - a mid-word cut of
+    # "content". _overlap_tail trims it forward to the next real word,
+    # so chunk 2 must start with "ZZZMARKERZZZ", never a stray "t".
+    assert chunks[1].text.startswith("ZZZMARKERZZZ here.")
     assert para2 in chunks[1].text
+
+
+def test_overlap_tail_never_starts_mid_word():
+    """Direct regression test for the mid-word-cut bug found by tracing
+    real overlap output on data/tenant_b/claims-policy.md: a raw
+    text[-overlap_chars:] slice cut "Overview" into "w" + "Overvie",
+    producing a chunk starting with the single stray character 'w'."""
+    from src.chunking import _overlap_tail
+
+    text = "...this document describes how claims are lodged and assessed."
+    # raw text[-11:] is "d assessed." - a genuine mid-word cut of "lodged".
+    raw = text[-11:]
+    assert raw == "d assessed."
+
+    tail = _overlap_tail(text, overlap_chars=11)
+    assert tail == "assessed."  # trimmed forward to the next real word
+    assert text.endswith(tail)  # still a genuine substring, not fabricated
 
 
 def test_rejects_overlap_not_smaller_than_target():

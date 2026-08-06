@@ -15,9 +15,9 @@
     "recall_hit": true,
     "quality_hit": true,
     "context_relevance": 0.8587378859519958,
-    "answer_relevance": 0.8148764371871948,
-    "faithfulness": 0.6739751696586609,
-    "answer": "The replacement card fee is $10.00."
+    "answer_relevance": 0.9447000622749329,
+    "faithfulness": 0.8286362886428833,
+    "answer": "The replacement card fee at Acme Bank is $10.00 (unless the replacement is fraud\u2011related, in which case it is waived)."
   },
   {
     "id": "qa-3",
@@ -35,9 +35,9 @@
     "recall_hit": true,
     "quality_hit": true,
     "context_relevance": 0.8365578651428223,
-    "answer_relevance": 0.8826137185096741,
-    "faithfulness": 0.7280107140541077,
-    "answer": "The excess on a windscreen-only claim at Globex Motor is $100."
+    "answer_relevance": 0.8769305348396301,
+    "faithfulness": 0.7349202036857605,
+    "answer": "The excess on a windscreen\u2011only claim at Globex Motor is $100."
   },
   {
     "id": "qa-5",
